@@ -8,24 +8,21 @@ name: Publish to npm
 # `scripts/release-mcp.sh`, which snapshots `sdks/mcp/` here, bumps the
 # version, and pushes a `v<x.y.z>` tag that triggers this workflow.
 #
-# Auth: a token (`NPM_TOKEN` repo secret) + `--provenance`. Provenance works
-# here because the source repo is public and `id-token: write` is granted —
-# the same flag failed from the private monorepo, which is why this mirror
-# exists. (Provenance ≠ Trusted Publishing: provenance just needs a public
-# repo + OIDC permission; it works fine with token auth.)
+# Auth: tokenless npm Trusted Publishing (OIDC), like @savantoai/ai-sdk. The
+# runner mints a short-lived OIDC token from `id-token: write`, which npm
+# verifies against the Trusted Publisher configured on the package:
+#   https://www.npmjs.com/package/@savantoai/mcp-server/access
+#     Provider: GitHub Actions / Org: SavantoAI / Repo: mcp-server
+#     Workflow filename: publish.yml / Environment: (blank)
+# There is intentionally NO `NODE_AUTH_TOKEN` env on the publish steps —
+# setting it (even to a placeholder) can break the OIDC handshake
+# (actions/setup-node#1440). Provenance is attached automatically; `--provenance`
+# is kept explicit. The source repo must stay PUBLIC — sigstore refuses to
+# verify provenance from a private repo, which is why this mirror exists.
 #
-# Future hardening — migrate to tokenless Trusted Publishing (OIDC), like
-# @savantoai/ai-sdk:
-#   npm cannot CREATE a new package via OIDC (npm/cli#8544) — the first
-#   publish must use a token, which is what this workflow does. Once
-#   `@savantoai/mcp-server` exists on the registry:
-#     1. https://www.npmjs.com/package/@savantoai/mcp-server/access
-#     2. "Trusted Publisher" → "Add publisher":
-#          Provider: GitHub Actions / Org: SavantoAI / Repo: mcp-server
-#          Workflow filename: publish.yml / Environment: (blank)
-#     3. Drop the `NODE_AUTH_TOKEN` env below (it can break the OIDC
-#        handshake — actions/setup-node#1440), then delete the NPM_TOKEN
-#        secret. Subsequent releases auth via OIDC alone.
+# History: the first publish (0.1.1) used a token because npm cannot CREATE a
+# new package via OIDC (npm/cli#8544). Now that the package exists, releases
+# are tokenless.
 #
 # Trigger modes:
 #   1. Tag push: `v0.1.1`, `v0.2.0`, etc. — publishes the tagged version.
@@ -37,11 +34,12 @@ name: Publish to npm
 #        - dry_run=false: runs full pipeline + actual `npm publish`
 #
 # Requires:
-#   - `NPM_TOKEN` repo secret (an npm Automation or Granular token whose
-#     identity can publish in the `@savantoai` scope).
-#   - `permissions.id-token: write` (set below) so npm can attach provenance.
-#   - npm CLI >= 11.5.1 for provenance. Node 24 ships npm 11.6.x, so pinning
-#     `node-version: '24'` below satisfies this.
+#   - A Trusted Publisher configured on the package (see above) — no secrets.
+#   - `permissions.id-token: write` (set below) so the runner can mint the
+#     OIDC token npm needs and attach provenance.
+#   - npm CLI >= 11.5.1 for Trusted Publishing. Node 24 ships npm 11.6.x, so
+#     pinning `node-version: '24'` below satisfies this (older clients fail
+#     OIDC with a misleading 404 — npm/cli#9088).
 
 on:
   push:
@@ -113,14 +111,13 @@ jobs:
           fi
           echo "Resolved dist-tag: $(grep '^tag=' "$GITHUB_OUTPUT" | cut -d= -f2)"
 
+      # No `NODE_AUTH_TOKEN` env — Trusted Publishing uses the OIDC token the
+      # runner mints from `id-token: write`. Setting it can break the handshake
+      # (actions/setup-node#1440).
       - name: Publish to npmjs (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --dry-run --tag ${{ steps.disttag.outputs.tag }}
 
       - name: Publish to npmjs
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.dry_run == 'false')
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag ${{ steps.disttag.outputs.tag }}
