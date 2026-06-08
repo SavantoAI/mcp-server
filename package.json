@@ -1,0 +1,77 @@
+{
+  "name": "@savantoai/mcp-server",
+  "version": "0.1.1",
+  "description": "Savanto AI MCP (Model Context Protocol) server — lets Claude, Cursor, and other agents provision and configure Savanto workspaces.",
+  "type": "module",
+  "bin": {
+    "savanto-mcp": "dist/stdio.js"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./server": {
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      }
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "start": "node dist/stdio.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome lint src",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "savanto",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "ai",
+    "agent"
+  ],
+  "author": "Savanto",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SavantoAI/mcp-server.git"
+  },
+  "homepage": "https://savanto.ai",
+  "bugs": {
+    "url": "https://github.com/SavantoAI/savanto/issues"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
