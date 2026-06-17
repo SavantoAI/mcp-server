@@ -29,8 +29,8 @@ interface SkillDefinition {
 
 /**
  * Curated skill set for v1. Keep this list short — every skill we ship
- * is a promise to maintain; five is enough to cover the most common
- * provisioning paths without diluting the catalog.
+ * is a promise to maintain; a handful covering the most common
+ * provisioning and configuration paths is enough without diluting the catalog.
  */
 const SKILLS: SkillDefinition[] = [
   {
@@ -53,6 +53,27 @@ const SKILLS: SkillDefinition[] = [
     description:
       'Walk through chat widget settings (persona, special instructions, allowed domains) for a workspace, and verify changes via live chat tests.',
     file: 'configure-chat.md',
+  },
+  {
+    id: 'configure-custom-domain',
+    title: 'Configure a custom domain',
+    description:
+      'Add or change a custom capability (e.g. order tracking, account lookup) backed by MCP servers or REST APIs, using the discover → generate → validate → test → create flow.',
+    file: 'configure-custom-domain.md',
+  },
+  {
+    id: 'onboard-store-end-to-end',
+    title: 'Onboard a store end-to-end',
+    description:
+      'Stand up a new workspace from scratch: create it, ingest content (crawl or bulk upsert), configure behaviour and branding, and smoke-test — one guided flow.',
+    file: 'onboard-store-end-to-end.md',
+  },
+  {
+    id: 'audit-and-improve',
+    title: 'Audit and improve a workspace',
+    description:
+      'The observe → diagnose → refine → verify loop: use analytics, zero-result searches, negative feedback, and failing conversation threads to find what the assistant gets wrong, fix it (content/config/custom domain), and confirm the fix.',
+    file: 'audit-and-improve.md',
   },
   {
     id: 'debug-empty-search',

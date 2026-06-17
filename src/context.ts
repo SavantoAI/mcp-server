@@ -32,10 +32,25 @@ export interface ToolDefinition<Shape extends ZodRawShape> {
   description: string;
   /** Optional title for UI — defaults to the tool name. */
   title?: string;
-  /** Scope this tool requires. Omit for tools that work with any key. */
-  scope?: string;
+  /**
+   * Scope(s) this tool requires. Omit for tools that work with any key. A
+   * single string requires exactly that scope; an array means OR — the key
+   * needs ANY one of them. Use the array form to mirror cloud routes that
+   * accept multiple scopes (e.g. list endpoints that allow read OR admin).
+   */
+  scope?: string | string[];
   /** Zod shape for the input arguments. Use `{}` for no arguments. */
   inputSchema: Shape;
+  /**
+   * MCP behavioural hints. By default these are DERIVED from the tool name
+   * (get_/list_/search_/whoami → read-only; delete_/bulk_delete_ → destructive;
+   * upsert_/update_/patch_/delete_ → idempotent). Set explicitly only to
+   * override — e.g. the no-persist POST tools (generate_/validate_/test_/
+   * discover_) are read-only despite not matching a read prefix.
+   */
+  readOnly?: boolean;
+  destructive?: boolean;
+  idempotent?: boolean;
   /**
    * The handler. Throw `SavantoApiError` for API failures — the registry
    * wraps it into an MCP-shaped error response. Any other thrown value
@@ -62,7 +77,13 @@ export function maybeRegisterTool<Shape extends ZodRawShape>(
   ctx: ToolContext,
   def: ToolDefinition<Shape>,
 ): boolean {
-  if (def.scope && !hasScope(ctx.who, def.scope)) return false;
+  if (def.scope !== undefined) {
+    // OR semantics: the key needs any one of the listed scopes. An empty array
+    // matches nothing and fails closed (a mistaken `scope: []` won't expose the
+    // tool); omit `scope` entirely for tools that require no scope.
+    const required = Array.isArray(def.scope) ? def.scope : [def.scope];
+    if (!required.some((s) => hasScope(ctx.who, s))) return false;
+  }
   const wrappedHandler = async (rawArgs: unknown): Promise<CallToolResult> => {
     try {
       return await def.handler(ctx, rawArgs as ArgsFromShape<Shape>);
@@ -71,6 +92,16 @@ export function maybeRegisterTool<Shape extends ZodRawShape>(
       throw err;
     }
   };
+  // Derive MCP behavioural hints from the naming convention, with explicit
+  // overrides. These let clients auto-approve safe reads and flag destructive
+  // writes in their approval UI.
+  const n = def.name;
+  const annotations = {
+    title: def.title ?? def.name,
+    readOnlyHint: def.readOnly ?? /^(get_|list_|search_|whoami$)/.test(n),
+    destructiveHint: def.destructive ?? /^(delete_|bulk_delete_)/.test(n),
+    idempotentHint: def.idempotent ?? /^(upsert_|bulk_upsert_|update_|patch_|delete_|bulk_delete_)/.test(n),
+  };
   // biome-ignore lint/suspicious/noExplicitAny: SDK overload resolution — see comment above.
   (server.registerTool as any)(
     def.name,
@@ -78,6 +109,7 @@ export function maybeRegisterTool<Shape extends ZodRawShape>(
       title: def.title ?? def.name,
       description: def.description,
       inputSchema: def.inputSchema,
+      annotations,
     },
     wrappedHandler,
   );

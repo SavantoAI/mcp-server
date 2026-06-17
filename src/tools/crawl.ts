@@ -17,10 +17,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { maybeRegisterTool, type ToolContext } from '../context.js';
+import { WORKSPACE_ID_SCHEMA as WORKSPACE_ID_ARG } from '../schemas/common.js';
 import { request } from '../utils/fetch.js';
 import { okResult } from '../utils/result.js';
-
-const WORKSPACE_ID_ARG = z.string().min(1).describe('Target workspace slug.');
 
 export function registerCrawlTools(server: McpServer, ctx: ToolContext): number {
   let registered = 0;

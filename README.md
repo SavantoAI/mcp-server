@@ -1,27 +1,38 @@
 # @savantoai/mcp-server
 
-A local [Model Context Protocol](https://modelcontextprotocol.io) server that exposes your Savanto AI workspace to Claude, ChatGPT, Cursor, and any other MCP-compatible client — so an AI agent can provision workspaces, ingest content, kick off crawls, and chat on your behalf.
+A local [Model Context Protocol](https://modelcontextprotocol.io) server that exposes your Savanto AI workspace to Claude, ChatGPT, Cursor, and any other MCP-compatible client — so you can **configure, populate, and operate your store's AI assistant by talking to your own AI**, instead of clicking through a dashboard.
 
 ## What it does
 
-Once configured, your agent gains a curated set of tools that mirror the Savanto REST API:
+Once configured, your agent gains a curated set of tools that mirror the Savanto REST API, spanning the full **configure → observe → refine** loop:
 
-| Category       | Tools                                                                                                 | Scope required   |
-| -------------- | ----------------------------------------------------------------------------------------------------- | ---------------- |
-| Workspaces     | `list_workspaces`, `create_workspace`, `update_workspace`, `delete_workspace`, `get_workspace_settings` | `tenant:admin`   |
-| Crawl          | `start_crawl`, `get_crawl_status`, `get_crawl_history`, `get_crawl_config`, `update_crawl_config`       | `admin:posts`    |
-| Content        | `upsert_product`, `upsert_post`                                                                         | `admin:products`, `admin:posts` |
-| Search         | `search_products`, `search_posts`                                                                       | `search:products`, `search:posts` |
-| Chat           | `chat`                                                                                                  | `chat`           |
-| Diagnostics    | `whoami`, `get_tenant_usage`                                                                            | (none) / `tenant:admin` |
+| Category | Representative tools | Scope |
+| --- | --- | --- |
+| Workspaces | `list_workspaces`, `create_workspace`, `update_workspace`, `delete_workspace` | `tenant:admin` |
+| Configuration | `get_workspace_settings`, `update_workspace_settings`, custom-domain CRUD, `discover_tools`, `generate_domain_config`, `validate_custom_domain`, `test_domain_connection`, `generate_color_scheme`, chat/search widget config | `config:admin` |
+| Content | `upsert_product`/`upsert_post` (+ `bulk_*`, `list_*`, `get_*`, `patch_*`, `delete_*`) | `admin:products`, `admin:posts` |
+| Taxonomies | `upsert_taxonomy`, `bulk_upsert_taxonomies`, `list/get/delete_taxonomy` | `admin:taxonomies` |
+| Prompts | `upsert_prompt`, `list_prompts`, `search_prompts`, `delete_prompt` (+ bulk) | `admin:prompts`, `prompts:read` |
+| Webhooks | `create_webhook`, `list/get/update/delete_webhook`, `test_webhook`, `get_webhook_stats` | `admin:webhooks` |
+| Crawl | `start_crawl`, `get_crawl_status`/`history`/`config`, `update_crawl_config` | `admin:posts` |
+| Search | `search_products`, `search_posts` | `search:products`, `search:posts` |
+| Analytics | `get_search_analytics`, `get_chat_analytics`, `get_feedback_analytics`, `search_search_logs`, `list_feedback` | `tenant:admin`, `feedback:admin` |
+| Threads | `search_threads`, `get_thread`, `get_thread_messages`, `get_thread_analytics`, `delete_thread`, `bulk_delete_threads` | `threads:admin` |
+| Chat | `chat` | `chat` |
+| Diagnostics | `whoami`, `get_tenant_usage` | (none) / `tenant:admin` |
 
-Tools are **scope-gated at startup** — the server probes `/tenant/whoami` with your key and only registers tools your key can actually use. An agent is never shown a tool it would get a 403 for.
+Two things keep the surface safe and legible to clients:
+
+- **Scope-gated at startup** — the server probes `/tenant/whoami` and only registers tools your key can actually use. An agent is never shown a tool it would get a 403 for, and a publishable widget key sees almost nothing.
+- **Annotated** — every tool carries MCP hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so clients can auto-approve safe reads and flag destructive writes; deletes additionally require an explicit `confirm: true`.
 
 The server also exposes **Skills** (MCP prompts) — step-by-step playbooks for common multi-tool workflows:
 
-- `onboard-wordpress` – provision a workspace, install the plugin, verify the first sync
-- `onboard-shopify` – Shopify app onboarding with a merchant walkthrough
+- `onboard-store-end-to-end` – create a workspace, ingest content, configure behaviour + branding, smoke-test
+- `onboard-wordpress` / `onboard-shopify` – platform-specific onboarding walkthroughs
 - `configure-chat` – tune persona, special instructions, and handoff rules
+- `configure-custom-domain` – wire a custom capability (order tracking, account lookup) to MCP servers / REST APIs
+- `audit-and-improve` – the observe→refine loop: find failing chats / zero-result searches / negative feedback and fix them
 - `debug-empty-search` – diagnose why a product search returns no hits
 - `migrate-from-competitor` – bulk-import from another chat vendor's export
 
@@ -45,6 +56,29 @@ Point to a non-production cloud (staging, local dev):
 ```bash
 export SAVANTO_API_URL=http://localhost:3001
 ```
+
+## Remote server (preview)
+
+In addition to the local stdio server above, the same tool surface can run as a
+**hosted HTTP server** so clients connect to a URL instead of spawning `npx` —
+no local Node, no per-machine config. This is the path toward one-click
+"Connect to Claude/ChatGPT" (OAuth) onboarding; today it accepts your secret key
+as a Bearer token.
+
+```bash
+# Each client authenticates per-request — there is NO server-wide key.
+SAVANTO_API_URL=https://api.savanto.ai PORT=8080 npx -y -p @savantoai/mcp-server savanto-mcp-http
+```
+
+The server mounts the MCP endpoint at `/mcp` and a liveness probe at `/healthz`.
+Clients send their key as `Authorization: Bearer if_sk_…`; the tool surface is
+scope-gated to that key's tenant, exactly as in the stdio server. Point an MCP
+client that supports remote (Streamable HTTP) servers at
+`https://your-host/mcp` with that bearer token.
+
+> Auth is currently the raw secret key. A future release replaces it with
+> OAuth-issued, tenant-scoped tokens so customers can connect with zero key
+> handling — the transport and tool layer are unchanged by that swap.
 
 ## Client configuration
 
@@ -123,13 +157,15 @@ The Inspector gives you a web UI to list tools, call them directly, and watch re
 
 Once the server is registered in your MCP client, try:
 
-> "Create a new Savanto workspace called `acme-store` for the Shopify platform, then start a crawl of `https://acme.test` and let me know when it finishes."
+> "Set up a new Savanto workspace for `acme-store`, crawl `https://acme.test`, give it an outdoor-adventure tone, and brand the widget around `#0a7d2c`." *(end-to-end onboarding)*
 
-> "Search my `acme-store` workspace for products matching 'waterproof hiking boots' in the $100–$200 range."
+> "Look at `acme-store`'s last 30 days — what are visitors searching for that returns nothing, and which conversations went unresolved? Then add content to fix the top few." *(the observe→refine loop)*
 
-> "Tune the chat persona for `acme-store` to be enthusiastic about outdoor adventure."
+> "Add an order-tracking capability to `acme-store` backed by our MCP server at `https://mcp.acme.test/orders`, validate it, and test it before enabling." *(custom domain)*
 
-The agent will pick the right tools automatically. You can also invoke a Skill explicitly — e.g. in Claude Desktop, `/onboard-shopify` kicks off that full playbook.
+> "Why did this conversation get a thumbs-down?" — pull `list_feedback`, read the thread, and propose a fix.
+
+The agent picks the right tools automatically (and clients can auto-approve the read-only ones). You can also invoke a Skill explicitly — e.g. in Claude Desktop, `/onboard-store-end-to-end` or `/audit-and-improve` kicks off that full playbook.
 
 ## Environment variables
 

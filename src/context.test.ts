@@ -58,6 +58,47 @@ describe('maybeRegisterTool', () => {
     expect(server.registerTool).not.toHaveBeenCalled();
   });
 
+  it('array scope uses OR — registers if the key has ANY one of the listed scopes', () => {
+    // A key with only admin:prompts should still get a tool gated on
+    // ['prompts:read', 'admin:prompts'] (mirrors cloud's read-OR-admin routes).
+    const server = makeServer();
+    const registered = maybeRegisterTool(server, ctxFor({ scopes: ['admin:prompts'] }), {
+      name: 'list_prompts',
+      description: 'List prompts.',
+      scope: ['prompts:read', 'admin:prompts'],
+      inputSchema: {},
+      handler: async () => ({ content: [] }),
+    });
+    expect(registered).toBe(true);
+    expect(server.registerTool).toHaveBeenCalledOnce();
+  });
+
+  it('an empty scope array fails closed (never registers, even for a wildcard key)', () => {
+    const server = makeServer();
+    const registered = maybeRegisterTool(server, ctxFor({ scopes: ['*'] }), {
+      name: 'oops',
+      description: 'A tool with a mistaken empty scope array.',
+      scope: [],
+      inputSchema: {},
+      handler: async () => ({ content: [] }),
+    });
+    expect(registered).toBe(false);
+    expect(server.registerTool).not.toHaveBeenCalled();
+  });
+
+  it('array scope returns false when the key has NONE of the listed scopes', () => {
+    const server = makeServer();
+    const registered = maybeRegisterTool(server, ctxFor({ scopes: ['chat'] }), {
+      name: 'list_prompts',
+      description: 'List prompts.',
+      scope: ['prompts:read', 'admin:prompts'],
+      inputSchema: {},
+      handler: async () => ({ content: [] }),
+    });
+    expect(registered).toBe(false);
+    expect(server.registerTool).not.toHaveBeenCalled();
+  });
+
   it('treats a secret key with an empty scope list as having all scopes (wildcard)', () => {
     const server = makeServer();
     const registered = maybeRegisterTool(server, ctxFor({ keyType: 'secret', scopes: [] }), {
@@ -115,5 +156,52 @@ describe('maybeRegisterTool', () => {
       args: unknown,
     ) => Promise<unknown>;
     await expect(handler({})).rejects.toThrow(TypeError);
+  });
+});
+
+describe('maybeRegisterTool annotations', () => {
+  function annotationsFor(name: string, overrides: Record<string, unknown> = {}) {
+    const server = makeServer();
+    maybeRegisterTool(server, ctxFor({ scopes: ['*'] }), {
+      name,
+      description: 'x',
+      inputSchema: {},
+      handler: async () => ({ content: [] }),
+      ...overrides,
+    });
+    return (server.registerTool as ReturnType<typeof vi.fn>).mock.calls[0][1].annotations as {
+      readOnlyHint: boolean;
+      destructiveHint: boolean;
+      idempotentHint: boolean;
+    };
+  }
+
+  it('derives readOnlyHint from get_/list_/search_/whoami names', () => {
+    expect(annotationsFor('get_product').readOnlyHint).toBe(true);
+    expect(annotationsFor('list_products').readOnlyHint).toBe(true);
+    expect(annotationsFor('search_threads').readOnlyHint).toBe(true);
+    expect(annotationsFor('whoami').readOnlyHint).toBe(true);
+    expect(annotationsFor('upsert_product').readOnlyHint).toBe(false);
+  });
+
+  it('derives destructiveHint + idempotentHint for delete tools', () => {
+    const del = annotationsFor('delete_product');
+    expect(del.destructiveHint).toBe(true);
+    expect(del.idempotentHint).toBe(true);
+    const bulk = annotationsFor('bulk_delete_threads');
+    expect(bulk.destructiveHint).toBe(true);
+  });
+
+  it('marks upsert/update/patch idempotent but create non-idempotent', () => {
+    expect(annotationsFor('upsert_post').idempotentHint).toBe(true);
+    expect(annotationsFor('update_webhook').idempotentHint).toBe(true);
+    expect(annotationsFor('create_workspace').idempotentHint).toBe(false);
+    expect(annotationsFor('create_workspace').destructiveHint).toBe(false);
+  });
+
+  it('honors an explicit readOnly override for no-persist POST tools', () => {
+    // e.g. generate_domain_config POSTs but never mutates state.
+    expect(annotationsFor('generate_domain_config', { readOnly: true }).readOnlyHint).toBe(true);
+    expect(annotationsFor('generate_domain_config').readOnlyHint).toBe(false); // without override
   });
 });

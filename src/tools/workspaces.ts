@@ -15,17 +15,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { maybeRegisterTool, type ToolContext } from '../context.js';
+import { WORKSPACE_ID_SCHEMA } from '../schemas/common.js';
 import { request, SavantoApiError } from '../utils/fetch.js';
 import { okResult } from '../utils/result.js';
-
-// Workspace IDs in the tenant table have historically accepted a broader
-// range than a strict slug regex would allow (legacy tenants, capital
-// letters, short names). We validate minimally here (non-empty, length
-// cap) and let the cloud be the source of truth — enforcing a tighter
-// client-side regex would make some existing workspaces unaddressable
-// via MCP. `create_workspace` callers are still coached toward a slug
-// shape by the argument description.
-const WORKSPACE_ID_SCHEMA = z.string().min(1).max(100).describe('Workspace ID (typically a slug, e.g. "acme-store").');
 
 export function registerWorkspaceTools(server: McpServer, ctx: ToolContext): number {
   let registered = 0;
@@ -151,7 +143,10 @@ export function registerWorkspaceTools(server: McpServer, ctx: ToolContext): num
       name: 'get_workspace_settings',
       description:
         'Retrieve detailed settings for a workspace — chat widget config, search widget config, live-agent schedule, MCP config, custom domains. Use this to introspect how a workspace is configured before making changes.',
-      scope: 'tenant:admin',
+      // GET /workspace/{id}/details requires ADMIN_CONFIG (config:admin), like the
+      // other config tools — NOT tenant:admin (which gates the workspace-lifecycle
+      // tools that hit /tenant/workspaces).
+      scope: 'config:admin',
       inputSchema: {
         workspaceId: WORKSPACE_ID_SCHEMA,
       },

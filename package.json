@@ -1,10 +1,11 @@
 {
   "name": "@savantoai/mcp-server",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Savanto AI MCP (Model Context Protocol) server — lets Claude, Cursor, and other agents provision and configure Savanto workspaces.",
   "type": "module",
   "bin": {
-    "savanto-mcp": "dist/stdio.js"
+    "savanto-mcp": "dist/stdio.js",
+    "savanto-mcp-http": "dist/http.js"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -21,6 +22,12 @@
         "types": "./dist/server.d.ts",
         "default": "./dist/server.js"
       }
+    },
+    "./http": {
+      "import": {
+        "types": "./dist/http/handler.d.ts",
+        "default": "./dist/http/handler.js"
+      }
     }
   },
   "sideEffects": false,
@@ -28,6 +35,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "start": "node dist/stdio.js",
+    "start:http": "node dist/http.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome lint src",
@@ -49,9 +57,9 @@
     "type": "git",
     "url": "git+https://github.com/SavantoAI/mcp-server.git"
   },
-  "homepage": "https://savanto.ai",
+  "homepage": "https://savanto.ai/mcp",
   "bugs": {
-    "url": "https://github.com/SavantoAI/savanto/issues"
+    "url": "https://github.com/SavantoAI/mcp-server/issues"
   },
   "files": [
     "dist",
@@ -63,6 +71,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.14",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },
