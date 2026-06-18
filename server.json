@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.SavantoAI/mcp-server",
+  "description": "Manage your Savanto store from your AI: catalog, content, prompts, and analytics, by chat.",
+  "version": "0.2.1",
+  "websiteUrl": "https://savanto.ai/mcp",
+  "repository": {
+    "url": "https://github.com/SavantoAI/mcp-server",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@savantoai/mcp-server",
+      "version": "0.2.1",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "SAVANTO_API_KEY",
+          "description": "A Savanto secret API key (if_sk_…) from your dashboard. Local/stdio use only; the hosted remote uses one-click OAuth instead.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.savanto.ai/mcp"
+    }
+  ]
+}

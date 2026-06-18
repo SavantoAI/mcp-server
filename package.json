@@ -1,6 +1,7 @@
 {
   "name": "@savantoai/mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
+  "mcpName": "io.github.SavantoAI/mcp-server",
   "description": "Savanto AI MCP (Model Context Protocol) server — lets Claude, Cursor, and other agents provision and configure Savanto workspaces.",
   "type": "module",
   "bin": {
